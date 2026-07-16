@@ -27,11 +27,12 @@ POSITION_COL_PATTERN = re.compile(r"^position_(D\d+)_ms$")
 SUBJECT_META = {
     "theo":  {"group": "control", "cohort": "pilot", "has_dbs": False, "shoulder_width_cm": 42.0},
     "franc": {"group": "control", "cohort": "pilot", "has_dbs": False, "shoulder_width_cm": 42.0},
-    "pam":   {"group": "control", "cohort": "pilot", "has_dbs": False, "shoulder_width_cm": 42.0},
+    "pam":   {"group": "patient", "cohort": "pilot", "has_dbs": False, "shoulder_width_cm": 42.0},
 }
 
-YOUNG_CONTROL_SUBJECTS = ["pam"]
 
+# Default controls.
+YOUNG_CONTROL_SUBJECTS = ["franc", "theo"]
 PATIENT_ID = None
 MATCHED_CONTROL_ID = None
 CLINICAL_SESSION = None

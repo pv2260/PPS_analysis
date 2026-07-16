@@ -9,6 +9,74 @@ import pandas as pd
 from .config import RT_MIN_MS, RT_MAX_MS, DROP_POSITIONS
 from ._compat import display
 
+def repair_pps_rt_ms_absolute_timestamps(df):
+    """
+    Repairs old PPS files where rt_ms was accidentally stored as an absolute
+    response timestamp instead of response_time_ms - vibrotactile_onset_ms.
+
+    Keeps a backup column: rt_ms_before_repair.
+    Visual-only trials are set to NaN because H1 uses tactile RTs only.
+    """
+    df = df.copy()
+
+    # Convert likely timing columns to numeric.
+    timing_cols = [
+        "rt_ms",
+        "reaction_time_ms",
+        "response_time_ms",
+        "vibrotactile_onset_ms",
+        "stimulus_onset_ms",
+    ]
+
+    for c in timing_cols:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    if "rt_ms" not in df.columns:
+        df["rt_ms"] = np.nan
+
+    df["rt_ms_before_repair"] = df["rt_ms"]
+
+    tactile = df["sensory_condition"].isin(["T", "VT"])
+
+    # A true RT should be in the hundreds of ms, not hundreds of thousands.
+    bad_or_missing_rt = (
+        df["rt_ms"].isna()
+        | (df["rt_ms"].abs() > 10000)
+    )
+
+    # Best reconstruction: response time minus vibrotactile onset.
+    if {"response_time_ms", "vibrotactile_onset_ms"}.issubset(df.columns):
+        rt_from_vibration = df["response_time_ms"] - df["vibrotactile_onset_ms"]
+
+        plausible = rt_from_vibration.between(-5000, 5000)
+
+        repair_mask = tactile & bad_or_missing_rt & plausible
+
+        df.loc[repair_mask, "rt_ms"] = rt_from_vibration.loc[repair_mask]
+
+        print(f"Repaired RTs using response_time_ms - vibrotactile_onset_ms: {repair_mask.sum()} rows")
+
+    else:
+        print("Could not repair from response_time_ms - vibrotactile_onset_ms.")
+        print("Available timing columns:")
+        print([c for c in df.columns if "time" in c.lower() or "rt" in c.lower() or "onset" in c.lower()])
+
+    # Fallback: if reaction_time_ms exists and is already plausible, use it.
+    if "reaction_time_ms" in df.columns:
+        plausible_reaction = df["reaction_time_ms"].between(-5000, 5000)
+
+        repair_mask = tactile & df["rt_ms"].isna() & plausible_reaction
+
+        df.loc[repair_mask, "rt_ms"] = df.loc[repair_mask, "reaction_time_ms"]
+
+        print(f"Repaired RTs using reaction_time_ms fallback: {repair_mask.sum()} rows")
+
+    # Visual-only trials should not enter tactile RT analyses.
+    df.loc[df["sensory_condition"].eq("V"), "rt_ms"] = np.nan
+
+    return df
+
 
 def mark_pps_usable(pps, rt_min_ms=100, rt_max_ms=1000, drop_positions=None):
     pps = pps.copy()

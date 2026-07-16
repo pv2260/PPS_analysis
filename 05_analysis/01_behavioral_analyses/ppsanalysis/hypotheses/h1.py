@@ -54,6 +54,14 @@ def run(t, plot=True):
     # so that each participant has one facilitation value per distance.
 
     facilitation = t.facilitation_young
+    
+    speed_profile = facilitation.pivot_table(
+    index=["position_rank", "speed"],
+    columns="subject",
+    values="facilitation_ms",
+    )
+
+    results["speed_profile"] = speed_profile
 
     facilitation_by_distance = facilitation.groupby(
         ["subject", "position_rank"],
@@ -107,17 +115,35 @@ def run(t, plot=True):
 
     values = nearfar_per_subject["nearfar_pps"].dropna().to_numpy()
 
-    boot = bootstrap_mean_ci(
-        values,
-        n_boot=config.N_BOOT,
-        ci=95,
-        seed=config.RANDOM_SEED,
-    )
+    observed_mean = float(np.mean(values)) if len(values) > 0 else np.nan
 
-    wilcoxon = wilcoxon_one_sided(values, alternative="greater")
+    if len(values) >= 2:
+        boot = bootstrap_mean_ci(
+            values,
+            n_boot=config.N_BOOT,
+            ci=95,
+            seed=config.RANDOM_SEED,
+        )
 
-    # The preregistered criterion: the bootstrap CI must be entirely above zero.
-    supported = bool(boot["ci_low"] > 0)
+        wilcoxon = wilcoxon_one_sided(values, alternative="greater")
+
+        # The preregistered criterion: the bootstrap CI must be entirely above zero.
+        supported = bool(boot["ci_low"] > 0)
+
+    else:
+        boot = {
+            "n": len(values),
+            "mean": observed_mean,
+            "ci_low": np.nan,
+            "ci_high": np.nan,
+        }
+
+        wilcoxon = {
+            "W": np.nan,
+            "p": np.nan,
+        }
+
+        supported = False
 
     results["values"] = values
     results["boot"] = boot
@@ -137,6 +163,13 @@ def run(t, plot=True):
         results["figure"] = fig
 
     return results
+
+    if "speed_profile" in results:
+        print("H1, speed-specific facilitation")
+        print("  rows = distance rank and speed")
+        print()
+        print(results["speed_profile"].round(1).to_string())
+        print()
 
 
 def report(results):
@@ -245,23 +278,21 @@ def make_figure(results):
 
     ax.axhline(0, linestyle="--", linewidth=0.8, color="gray")
 
-    # The group mean with its bootstrap CI, drawn to the right of the dots.
-    if np.isfinite(boot["mean"]):
-        mean_x = len(values) + 0.5
-
-        lower_error = boot["mean"] - boot["ci_low"]
-        upper_error = boot["ci_high"] - boot["mean"]
-
+    if (
+        len(values) >= 2
+        and np.isfinite(boot["mean"])
+        and np.isfinite(boot["ci_low"])
+        and np.isfinite(boot["ci_high"])
+    ):
         ax.errorbar(
-            mean_x,
-            boot["mean"],
-            yerr=[[lower_error], [upper_error]],
+            x=len(values) + 0.5,
+            y=boot["mean"],
+            yerr=[[boot["mean"] - boot["ci_low"]], [boot["ci_high"] - boot["mean"]]],
             fmt="o",
             color=style.INK,
-            markersize=6,
-            capsize=4,
-            zorder=3,
-            label="mean (95% CI)",
+            elinewidth=1.5,
+            capsize=3,
+            label="group mean ± 95% CI",
         )
 
     ax.set_xticks(list(x_positions) + [len(values) + 0.5])

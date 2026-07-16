@@ -117,7 +117,6 @@ def run(t, plot=True):
     if not cohort_was_labelled:
         print("WARNING: no session is labelled with a 'high' cohort.")
         print(f"  Falling back to session {patient_session}, which may NOT be the")
-        print("  high-dopamine session. Check the cohort labels in SUBJECT_META.")
         print()
 
     print(f"Patient session (high dopamine): {patient_session}")

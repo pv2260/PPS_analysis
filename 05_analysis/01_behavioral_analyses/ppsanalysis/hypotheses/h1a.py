@@ -135,7 +135,6 @@ def run(t, plot=True):
         print()
         print("Check that:")
         print("  - young_subjects is not empty")
-        print("  - subjects are labelled group == 'control' in SUBJECT_META")
         print("  - VT and T trials exist at the SAME position within a subject/session")
         print("  - rt_ms is computable for both T and VT trials")
 
@@ -210,7 +209,22 @@ def report(results):
 
     print("H1a: group-averaged profile (descriptive)")
     print()
-    print(pd.Series(results["group_comparison"]).round(3).to_string())
+ 
+    comparison = pd.Series(results["group_comparison"])
+
+    def fmt_value(x):
+        try:
+            if pd.isna(x):
+                return "nan"
+        except TypeError:
+            pass
+
+        try:
+            return f"{float(x):.3f}"
+        except (TypeError, ValueError):
+            return str(x)
+
+    print(comparison.map(fmt_value).to_string())
     print()
 
     n_total = results["n_total"]

@@ -1,0 +1,38 @@
+{
+    "python.defaultInterpreterPath": "/opt/anaconda3/envs/pps_analysis/bin/python",
+    "jupyter.defaultKernelName": "pps_analysis",
+    "jupyter.kernels.filter": [
+        {
+            "path": "/opt/anaconda3/envs/MLCourse/bin/python",
+            "type": "pythonEnvironment"
+        },
+        {
+            "path": "/opt/anaconda3/envs/audioenv/bin/python",
+            "type": "pythonEnvironment"
+        },
+        {
+            "path": "/opt/anaconda3/envs/eeg/bin/python",
+            "type": "pythonEnvironment"
+        },
+        {
+            "path": "/opt/anaconda3/envs/matlab_py310/bin/python",
+            "type": "pythonEnvironment"
+        },
+        {
+            "path": "/opt/anaconda3/envs/matlab_py311/bin/python",
+            "type": "pythonEnvironment"
+        },
+        {
+            "path": "/opt/anaconda3/envs/pps/bin/python",
+            "type": "pythonEnvironment"
+        },
+        {
+            "path": "/opt/anaconda3/envs/py37/bin/python",
+            "type": "pythonEnvironment"
+        },
+        {
+            "path": "/opt/anaconda3/bin/python",
+            "type": "pythonEnvironment"
+        }
+    ]
+}

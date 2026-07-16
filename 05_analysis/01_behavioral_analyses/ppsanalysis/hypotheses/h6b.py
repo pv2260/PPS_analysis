@@ -96,7 +96,6 @@ def run(t, plot=True):
 
     if high_session is None or low_session is None:
         print("H6b cannot run. We need BOTH a HIGH and a LOW session, labelled in")
-        print("the 'cohort' column. Check SUBJECT_META in config.py.")
 
         results["h6b_classification"] = "not estimable: missing HIGH or LOW session"
         return results

@@ -9,8 +9,7 @@ import os, re, glob, json
 import numpy as np
 import pandas as pd
 
-from .config import TRIAL_FILE, POSITION_COL_PATTERN, SUBJECT_META, PILOT_DATA_DIR, OUT_DIR
-
+from .config import TRIAL_FILE, POSITION_COL_PATTERN, PILOT_DATA_DIR, OUT_DIR, SUBJECT_META
 
 def read_csv(path):
     df = pd.read_csv(path, encoding="utf-8-sig")
@@ -44,21 +43,36 @@ def clean_pps(df, subject, session, meta):
         "width": pick(df, "width").astype(str).str.strip().str.lower(),
         "vibrotactile_onset_ms": pd.to_numeric(pick(df, "vibrotactile_onset_ms"), errors="coerce"),
         "response_time_ms": pd.to_numeric(pick(df, "response_time_ms"), errors="coerce"),
+        "reaction_time_ms": pd.to_numeric(pick(df, "reaction_time_ms"), errors="coerce"),
+        "trial_interrupted": pd.to_numeric(pick(df, "trial_interrupted"), errors="coerce").fillna(0).astype(int),
     })
 
-    # D1 = closest, D7 = farthest
+    # D1 = closest, D7 = farthest.
     out["position_rank"] = pd.to_numeric(
         out["position"].str.extract(r"D(\d+)")[0],
         errors="coerce"
     )
 
-    # reaction_time_ms in this Unity export logs ball position in metres at
-    # the moment of response (0.15 m = D1 … 3.25 m = D7), not a duration.
-    # response_time_ms is the true RT already computed by Unity
-    # (response absolute time − vibrotactile onset), so use it directly.
-    out["rt_ms"] = pd.to_numeric(pick(df, "response_time_ms"), errors="coerce")
-    if "reaction_time_ms" in df.columns:
-        out["distance_at_response_m"] = pd.to_numeric(df["reaction_time_ms"], errors="coerce")
+    # IMPORTANT:
+    # In the actual Unity CSVs:
+    #   response_time_ms      = absolute response timestamp in the session clock
+    #   vibrotactile_onset_ms = absolute tactile-onset timestamp
+    #   reaction_time_ms      = response_time_ms - vibrotactile_onset_ms
+    #
+    # Therefore the true RT is reaction_time_ms.
+    out["rt_ms"] = out["reaction_time_ms"]
+
+    # Fallback for any future file that lacks reaction_time_ms.
+    missing_rt = out["rt_ms"].isna()
+    has_response_and_onset = (
+        out["response_time_ms"].notna()
+        & out["vibrotactile_onset_ms"].notna()
+    )
+
+    out.loc[missing_rt & has_response_and_onset, "rt_ms"] = (
+        out.loc[missing_rt & has_response_and_onset, "response_time_ms"]
+        - out.loc[missing_rt & has_response_and_onset, "vibrotactile_onset_ms"]
+    )
 
     out["response_made"] = (
         pick(df, "response_made")
@@ -66,11 +80,18 @@ def clean_pps(df, subject, session, meta):
         .isin(["true", "1", "1.0", "yes"])
     )
 
-    # Final PPS usability rule
-    out["usable"] = out["rt_ms"].between(100, 3000, inclusive="neither")
+    # Visual-only trials do not have tactile RTs and should not enter H1.
+    out.loc[out["sensory_condition"].eq("V"), "rt_ms"] = np.nan
+
+    # Preliminary usability. The proper QC function can overwrite this later.
+    out["usable"] = (
+        out["response_made"]
+        & out["trial_interrupted"].eq(0)
+        & out["sensory_condition"].isin(["T", "VT"])
+        & out["rt_ms"].between(100, 3000, inclusive="neither")
+    )
 
     return out
-
 
 def clean_collision(df, subject, session, meta):
     shoulder_width = meta.get("shoulder_width_cm", 42.0)
@@ -142,8 +163,9 @@ def load_unity_exports(data_dir, verbose=True):
             "cohort": "unknown",
             "has_dbs": False,
             "shoulder_width_cm": 42.0,
-            **SUBJECT_META.get(subject, {}),
         }
+
+        meta.update(SUBJECT_META.get(subject, {}))
 
         df = read_csv(path)
 
