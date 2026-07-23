@@ -1,5 +1,6 @@
 import os
 import re
+import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import TwoSlopeNorm
 
@@ -7,14 +8,13 @@ from matplotlib.colors import TwoSlopeNorm
 def plot_average_tfr(
     tfr_average_dict,
     event_name,
-    interpolation_config,
-    n_baseline_pts,
+    interpolation_config=None,
     t_min=None,
     t_max=None,
     f_min=None,
     f_max=None,
-    colormin=-3,
-    colormax=3,
+    colormin=None,
+    colormax=None,
     scale_db=10,
     cmap="RdBu_r",
     colorbar_label="Power (dB)",
@@ -56,7 +56,6 @@ def plot_average_tfr(
             f"{event_name} not found"
         )
 
-
     power = tfr_average_dict[event_name].copy()
 
 
@@ -87,6 +86,29 @@ def plot_average_tfr(
 
     data2plot = power.data * scale_db
 
+    # -----------------------------
+    # Automatic color scaling
+    # -----------------------------
+    if colormin is None or colormax is None:
+
+        # Flatten all channels, frequencies, and times
+        all_values = data2plot.flatten()
+
+        # Compute robust limits
+        q_low = np.quantile(all_values, 0.05)
+        q_high = np.quantile(all_values, 0.995)
+
+        if colormin is None:
+            colormin = q_low
+
+        if colormax is None:
+            if q_high <= 0:
+                colormax = 0.5
+                print(
+                    f"Warning: q_high ({q_high:.3f}) <= 0 Setting colormax to 0.5."
+                )
+            else:
+                colormax = q_high
 
     norm = TwoSlopeNorm(
         vmin=colormin,
@@ -102,29 +124,6 @@ def plot_average_tfr(
     interp_key = get_interpolation_key(
         event_name, groups
     )
-
-
-    vibration_time = None
-
-
-    if interp_key in interpolation_config:
-
-        cfg = interpolation_config[interp_key]
-
-
-        if cfg["type"] == "vibrotactile":
-
-            N1 = cfg["N1_points"]
-            N2 = cfg["N2_points"]
-
-            # index where vibration starts
-            vib_idx = N1 + n_baseline_pts
-
-            if vib_idx < len(times):
-
-                vibration_time = times[vib_idx]
-
-
 
     # -----------------------------
     # Saving folder
@@ -215,7 +214,6 @@ def plot_average_tfr(
             linewidth=2
         )
 
-
         # Stimulus onset
         ax.axvline(
             0,
@@ -227,15 +225,16 @@ def plot_average_tfr(
 
 
         # Vibration onset
-        if vibration_time is not None:
-
-            ax.axvline(
-                vibration_time,
-                color="red",
-                linestyle="--",
-                linewidth=2,
-                label="Vibration onset"
-            )
+        if interpolation_config !=None and interp_key in interpolation_config:
+            cfg = interpolation_config[interp_key]
+            if cfg["type"] == "vibrotactile":
+                ax.axvline(
+                    cfg["N_sec_before_vibration"],
+                    color="red",
+                    linestyle="--",
+                    linewidth=2,
+                    label="Vibration onset"
+                )
 
 
         ax.set_xlabel("")
@@ -302,9 +301,8 @@ def get_interpolation_key(event_name, groups=None):
     # If grouped name, replace by first original condition
     # --------------------------------------------------
     if groups is not None:
-
+        event_name = event_name.removesuffix("-tfr.h5")
         if event_name in groups:
-
             # Take first condition as representative
             # event_name = groups[event_name][0]
             return event_name
@@ -330,26 +328,3 @@ def get_interpolation_key(event_name, groups=None):
 
 
     return None
-
-
-# def get_interpolation_key(event_name):
-#     """
-#     Extract D and speed key from event name.
-
-#     Example:
-#         Both_D7_Narrow_Slow
-#         -> D7_Narrow_Slow
-#     """
-
-#     match = re.search(
-#         r"(D\d+_Narrow_(?:Fast|Slow))",
-#         event_name
-#     )
-
-#     if match:
-#         return match.group(1)
-
-#     elif "VisualOnly" in event_name:
-#         return event_name
-
-#     return None

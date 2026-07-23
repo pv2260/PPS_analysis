@@ -59,18 +59,18 @@ def group_eeg_markers_task2(markers_df, trigger_map, verbose=True):
 
     correct_controller = {
 
-        # Left = correct
-        "Slow_Near_Hit": "controller_left",
-        "Slow_Clear_Hit": "controller_left",
-        "Fast_Near_Hit": "controller_left",
+        # Left = Yes the ball is gonna hit me
         "Fast_Clear_Hit": "controller_left",
+        "Slow_Clear_Hit": "controller_left",
 
-
-        # Right = correct
-        "Slow_Clear_Miss": "controller_right",
-        "Slow_Near_Miss": "controller_right",
-        "Fast_Clear_Miss": "controller_right",
-        "Fast_Near_Miss": "controller_right",
+        # Right = No the ball is not gonna hit me
+        "Slow_Clear_Miss": "controller right",
+        "Fast_Clear_Miss": "controller right",
+        "Slow_Near_Hit": "controller right",      
+        "Fast_Near_Hit": "controller right",
+        "Slow_Near_Miss": "controller right",
+        "Fast_Near_Miss": "controller right",
+        
     }
 
 
@@ -83,7 +83,6 @@ def group_eeg_markers_task2(markers_df, trigger_map, verbose=True):
         marker = markers_df.iloc[i]
 
         trigger = marker["trigger_value"]
-
 
         # Ignore unknown triggers
         if trigger not in trigger_map:
@@ -144,6 +143,7 @@ def group_eeg_markers_task2(markers_df, trigger_map, verbose=True):
                     else:
                         # fallback if condition not specified
                         event_name = condition
+                        print("Not in condition dictionary")
 
 
 

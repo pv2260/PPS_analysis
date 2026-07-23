@@ -6,6 +6,7 @@ def remove_late_click_trials(
     events,
     events_metadata,
     sfreq,
+    task,
     max_click_delay=3.0,
     verbose=True
 ):
@@ -51,7 +52,11 @@ def remove_late_click_trials(
     for event_idx, metadata in events_metadata.items():
 
         stimulus_position = metadata["stimulus_position"]
-        click_position = metadata["click_position"]
+        if task == 'Task1_PPS':
+            click_position = metadata["click_position"]
+        elif task == 'Task2_HitOrMiss':
+            click_position = metadata["controller_position"]
+        
 
 
         # Only check events with vibration/click information

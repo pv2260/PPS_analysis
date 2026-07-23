@@ -126,7 +126,7 @@ def compare_sequences(vmrk_df, csv_df, save_path, trigger_map=None, normalize_ma
                     "csv_trial_id": None, "csv_category": None,
                     "csv_trigger_value_raw": None, "csv_trigger_value_used": None,
                     "label": trigger_map.get(mk_val, f"Unknown({mk_val})"),
-                    "note": "MRow in EEG rec but no matching row in CSV log",
+                    "note": "Row in EEG rec but no matching row in CSV log",
                 }
                 alignment_rows.append(row)
                 mismatch_rows.append(row)

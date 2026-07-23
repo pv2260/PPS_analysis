@@ -8,7 +8,7 @@ def basic_filtering(
     l_freq: float = 0.1,
     h_freq: float = 100.0,
     notch_freq: float = 50.0,
-    reference: Optional[str] = None,
+    reference: Optional[str] = "average",
     verbose: bool = True,
 ):
     """
@@ -36,8 +36,7 @@ def basic_filtering(
     raw_filt.notch_filter(freqs=[notch_freq], verbose=False)
 
     if reference is not None:
-        raw_filt.set_eeg_reference(reference, projection=(reference == "average"),
-                              verbose=False)
+        raw_filt.set_eeg_reference(reference, projection=False,verbose=False)
 
     if verbose:
         ref_str = f"  Reference: {reference}" if reference else ""
@@ -51,14 +50,13 @@ def basic_filtering(
     channels_to_plot = [
         "Fz",     # frontal
         "FCz",    # frontal/middle
-        "Cz",     # middle
         "Pz",     # middle parietal
         "P3",     # left parietal
         "P4"      # right parietal
     ]
 
-    t_start = 600  # seconds
-    duration = 120 # seconds
+    t_start = 60  # seconds
+    duration = 10 # seconds
 
     # Extract 20 seconds
     raw_segment = raw.copy().crop(

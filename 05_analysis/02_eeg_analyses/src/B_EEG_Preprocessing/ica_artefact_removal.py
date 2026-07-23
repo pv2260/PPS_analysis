@@ -14,14 +14,8 @@ def ica_artefact_removal(
     fit_params: Optional[dict] = None,
     auto_label: bool = True,
     label_threshold: float = 0.8,
-    eog_channels: Optional[list[str]] = None,
-    ecg_channel: Optional[str] = None,
     montage: Optional[Union[str, mne.channels.DigMontage]] = "standard_1020",
     random_state: int = 42,
-    plot_sanity: bool = True,
-    sanity_plot_dir: Optional[str] = None,
-    max_property_plots: int = 10,
-    overlay_picks: Optional[list[str]] = None,
     verbose: bool = True,
 ):
     """
@@ -70,14 +64,6 @@ def ica_artefact_removal(
     label_threshold : float
         Probability threshold above which a component is considered an
         artefact by ICLabel (default 0.8).
-    eog_channels : list[str] or None
-        Names of EOG channels to use for correlation-based EOG detection
-        (e.g. ["VEOG", "HEOG"]).  If None, channel-correlation is skipped
-        for eye artefacts, and no EOG score sanity plot is produced.
-    ecg_channel : str or None
-        Name of an ECG channel for correlation-based heartbeat detection.
-        If None, ECG-based exclusion is skipped, and no ECG score sanity
-        plot is produced.
     montage : str or DigMontage or None
         Electrode position montage required by ICLabel.  Accepts any name
         understood by ``mne.channels.make_standard_montage()`` (e.g.
@@ -87,28 +73,6 @@ def ica_artefact_removal(
         Default: ``"standard_1020"``.
     random_state : int
         Seed for reproducibility.
-    plot_sanity : bool
-        If True (default), generate the standard ICA sanity-check plots:
-          (a) component topographies (``ica.plot_components``)
-          (b) detailed properties for each *excluded* component - time
-              series, power spectrum, epochs image, topomap
-              (``ica.plot_properties``)
-          (c) a before/after signal overlay (``ica.plot_overlay``)
-          (d) EOG/ECG correlation-score plots (``ica.plot_scores``), only
-              if ``eog_channels``/``ecg_channel`` were provided
-    sanity_plot_dir : str or None
-        If provided, sanity-check figures are saved as PNGs into this
-        directory (created if missing) and the returned dict contains file
-        paths. If None (default), figures are left open and the returned
-        dict contains the Figure objects themselves for interactive
-        inspection (e.g. in a Jupyter notebook).
-    max_property_plots : int
-        Cap on how many excluded components get a full ``plot_properties``
-        figure, to avoid generating dozens of plots when many components
-        are excluded. Default 10.
-    overlay_picks : list[str] or None
-        Channels to show in the before/after overlay plot. None uses MNE's
-        default (average across EEG channels).
     verbose : bool
 
     Returns
@@ -119,39 +83,12 @@ def ica_artefact_removal(
         Fitted ICA object (``ica.exclude`` contains the excluded indices).
     excluded : list[int]
         Sorted list of excluded component indices.
-    sanity_plots : dict
-        Only meaningful if ``plot_sanity=True`` (empty dict otherwise).
-        Keys: "components", "properties", "overlay", "eog_scores",
-        "ecg_scores" (last two only present if the corresponding channels
-        were given). Each value is a list of either file paths (if
-        ``sanity_plot_dir`` was set) or Figure objects (if not).
-
-    Notes
-    -----
-    * ICA is fit on a **1 Hz high-pass copy** of the data.  The correction is
-      then applied to ``raw_filt`` so that you keep the original low-frequency
-      content for downstream analyses (standard practice in EEG pipelines).
-    * You can inspect components interactively *after* this function returns::
-
-          ica.plot_components()
-          ica.plot_sources(raw_filt)
-
-    Examples
-    --------
-    >>> raw_clean, ica, excluded, sanity_plots = ica_artefact_removal(
-    ...     raw_filt,
-    ...     n_components=30,
-    ...     montage="standard_1020",   # or "easycap-M1", "biosemi64", etc.
-    ...     eog_channels=["VEOG", "HEOG"],
-    ...     ecg_channel="ECG",
-    ...     sanity_plot_dir="qc/ica_sub-01",
-    ... )
+    component_labels: 
     """
     if fit_params is None:
         fit_params = {}
     if method == "infomax" and "extended" not in fit_params:
         fit_params["extended"] = True  # extended Infomax is the MNE/EEGLAB default
-
 
     # --- 1. Create data used for ICA fitting ---------------
     if verbose: print("[ICA] Preparing data for ICA fitting")
@@ -177,10 +114,7 @@ def ica_artefact_removal(
     # --- 1. High-pass copy for ICA fitting (standard practice) ---------------
     if verbose:
         print("[ica_artefact_removal] High-pass filtering at 1 Hz for ICA fit …")
-        print("[ica_artefact_removal] EEG re-referencing: Average reference")
     raw_for_ica.filter(l_freq=1.0, h_freq=None, verbose=False)
-    # Set the reference to the average activity of the whole scalp -> stabilize ICA
-    raw_for_ica.set_eeg_reference("average", verbose=False)
 
     # --- 1b. Ensure a montage is set (required by ICLabel) -------------------
     if montage is not None:
@@ -192,13 +126,10 @@ def ica_artefact_removal(
             montage_obj = montage
             if verbose:
                 print("[ica_artefact_removal] Setting provided DigMontage.")
-        # on_missing="ignore" silently skips channels absent from the montage
-        # (e.g. EOG/ECG channels that are not part of the standard cap)
         raw_for_ica.set_montage(montage_obj, on_missing="ignore", verbose=False)
     else:
         if verbose:
-            print("[ica_artefact_removal] Skipping montage (None passed — "
-                  "assuming digitisation is already embedded).")
+            print("[ica_artefact_removal] Skipping montage (None passed —bassuming digitisation is already embedded).")
 
     # --- 2. Fit ICA -----------------------------------------------------------
     ica = ICA(
@@ -209,8 +140,8 @@ def ica_artefact_removal(
         max_iter="auto",
     )
     if verbose:
-        print(f"[ica_artefact_removal] Fitting ICA ({method}, "
-              f"n_components={n_components}) …")
+        print(f"[ica_artefact_removal] Fitting ICA ({method}, n_components={n_components}) …")
+
     ica.fit(raw_for_ica, verbose=False)
     if verbose:
         print(f"  → {ica.n_components_} components extracted")
@@ -225,11 +156,9 @@ def ica_artefact_removal(
         labels      = component_labels["labels"]       # list of strings
         probs       = component_labels["y_pred_proba"] # (n_components, n_classes)
 
-        artefact_classes = {"eye blink", "heart beat", "muscle artifact",
-                            "line noise", "channel noise"}
+        artefact_classes = {"eye blink", "heart beat", "muscle artifact","line noise", "channel noise"}
         for idx, (label, prob_row) in enumerate(zip(labels, probs)):
             if label in artefact_classes:
-                # prob_row is ordered as ICLabel's class list
                 max_prob = prob_row.max()
                 if max_prob >= label_threshold:
                     excluded.append(idx)
@@ -240,90 +169,6 @@ def ica_artefact_removal(
     if verbose:
         print(f"[ica_artefact_removal] Total excluded components: {excluded}")
 
-    # --- 4. Sanity-check plots -------------------------------------------------
-    # 1. ICA component scalp maps print(" - ICA component topographies")
-    fig_components = ica.plot_components(show=False)
-    
-    # 2. ICA component traces (excluded components only)
-    print("  - Excluded ICA component traces")
-
-    # Define time window (seconds)
-    tmin = 0
-    tmax = 50
-
-    # Extract ICA component activations
-    sources = ica.get_sources(raw_for_ica)
-
-    # Get data
-    ica_data = sources.get_data()
-
-    # Time vector
-    times = sources.times
-
-    # Select only requested time window
-    mask = (times >= tmin) & (times <= tmax)
-
-    times = times[mask]
-    ica_data = ica_data[:, mask]
-
-
-    # Keep only excluded components
-    excluded_to_plot = [
-        ic for ic in excluded
-        if ic < ica_data.shape[0]
-    ]
-
-    if len(excluded_to_plot) > 0:
-
-        ica_data = ica_data[excluded_to_plot]
-
-        # Normalize each component
-        ica_data = (
-            ica_data /
-            np.std(ica_data, axis=1, keepdims=True)
-        )
-
-
-        fig_sources, axes = plt.subplots(
-            len(excluded_to_plot),
-            1,
-            figsize=(14, 2 * len(excluded_to_plot)),
-            sharex=True
-        )
-
-        if len(excluded_to_plot) == 1:
-            axes = [axes]
-
-
-        for i, ax in enumerate(axes):
-
-            ax.plot(
-                times,
-                ica_data[i],
-                linewidth=0.8
-            )
-
-            ax.set_ylabel(
-                f"IC {excluded_to_plot[i]}",
-                rotation=0,
-                labelpad=25
-            )
-
-            ax.grid(True)
-
-
-        axes[-1].set_xlabel("Time (s)")
-
-
-        fig_sources.suptitle(
-            f"Excluded ICA component activations (normalized)\n{tmin}-{tmax}s",
-            fontsize=14
-        )
-
-        plt.tight_layout()
-
-    else:
-        print("  - No excluded components to plot")
                 
     # --- 5. Apply ICA to the *original* filtered data -------------------------
     ica.exclude = excluded
@@ -340,8 +185,8 @@ def ica_artefact_removal(
 def plot_ica_before_after(
     raw_before,
     raw_after,
-    tmin=40,
-    tmax=60,
+    tmin=20,
+    tmax=40,
     n_channels=5,
     picks=None,
     random_state=None,
